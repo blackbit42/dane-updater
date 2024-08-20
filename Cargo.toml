@@ -1,0 +1,12 @@
+[package]
+name = "dane-updater"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+clap = { version = "4.5.11", features = ["derive"] }
+pkcs8 = "0.10.2"
+rustls-pemfile = "2.1.3"
+sec1 = "0.7.3"
+sha2 = "0.10.8"
