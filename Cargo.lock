@@ -58,6 +58,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3d1d046238990b9cf5bcde22a3fb3584ee5cf65fb2765f454ed428c7a0063da"
 
 [[package]]
+name = "base16"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d27c3610c36aee21ce8ac510e6224498de4228ad772a171ed65643a24693a5a8"
+
+[[package]]
 name = "base16ct"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -160,11 +166,14 @@ name = "dane-updater"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base16",
  "clap",
+ "der",
  "pkcs8",
  "rustls-pemfile",
  "sec1",
  "sha2",
+ "spki",
 ]
 
 [[package]]
@@ -268,6 +277,7 @@ dependencies = [
  "base16ct",
  "der",
  "generic-array",
+ "pkcs8",
  "zeroize",
 ]
 
