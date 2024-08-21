@@ -1,15 +1,28 @@
+use anyhow::anyhow;
 use clap::Parser;
 use rustls_pemfile::Item;
 use sec1::der::Encode;
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::BufReader;
-use std::path::PathBuf;
-//use sha2::{Sha256,Digest};
+use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(long)]
     current_key_file: PathBuf,
+}
+
+pub fn load_pubkey(path: impl AsRef<Path>) -> anyhow::Result<Vec<u8>> {
+    let current_key_file = fs::File::open(path.as_ref())?;
+    let mut reader = BufReader::new(current_key_file);
+    let current_public_keys: Vec<_> =
+        rustls_pemfile::read_all(&mut reader).collect::<Result<_, _>>()?;
+    match &current_public_keys[..] {
+        [] => anyhow::bail!("no entries"),
+        [item] => extract_pubkey(item).ok_or_else(|| anyhow!("item did not contain public key")),
+        _ => anyhow::bail!("too many entries"),
+    }
 }
 
 pub fn extract_pubkey(item: &Item) -> Option<Vec<u8>> {
@@ -38,36 +51,25 @@ pub fn extract_pubkey(item: &Item) -> Option<Vec<u8>> {
             let mut spki_bytes = Vec::new();
             spki.encode(&mut spki_bytes).unwrap();
             Some(spki_bytes)
-            //dbg!(pubkey);
-            //let mut hasher = Sha256::new();
-            //hasher.update(pubkey.unwrap());
-            //let sha256 = hasher.finalize();
-            //println!("sha256: {:#x}", sha256);
         }
         _ => None,
     }
+}
+
+pub fn sha256(data: &[u8]) -> Vec<u8> {
+    let mut hasher = Sha256::new();
+    hasher.update(&data);
+    hasher.finalize().to_vec()
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     println!("current_key_file: {}!", args.current_key_file.display());
 
-    let current_key_file = fs::File::open(args.current_key_file)?;
-    let mut reader = BufReader::new(current_key_file);
-    let current_public_keys: Vec<_> =
-        rustls_pemfile::read_all(&mut reader).collect::<Result<_, _>>()?;
-    println!("current_public_keys: {:?}", current_public_keys);
-    match &current_public_keys[..] {
-        [] => anyhow::bail!("no entries"),
-        //[item] => println!("{:?}", extract_pubkey(item)),
-        [item] => {
-            let pubkey = extract_pubkey(item).unwrap();
-            //println!("{:?}", pubkey);
-            println!("length of pubkey: {}", pubkey.len());
-            println!("pubkey: {}", base16::encode_lower(&pubkey));
-        }
-        _ => anyhow::bail!("too many entries"),
-    }
+    let pubkey = load_pubkey(args.current_key_file)?;
+    println!("length of pubkey: {}", pubkey.len());
+    println!("pubkey: {}", base16::encode_lower(&pubkey));
+    println!("sha256: {}", base16::encode_lower(&sha256(&pubkey)));
 
     Ok(())
 }
