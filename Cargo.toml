@@ -8,6 +8,8 @@ anyhow = "1.0.86"
 base16 = "0.2.1"
 clap = { version = "4.5.11", features = ["derive"] }
 der = { version = "0.7.9", features = ["std"] }
+hickory-client = "0.24.1"
+hickory-resolver = { version = "0.24.1", features = ["system-config"] }
 pkcs8 = "0.10.2"
 rustls-pemfile = "2.1.3"
 sec1 = { version = "0.7.3", features = ["pkcs8"] }
