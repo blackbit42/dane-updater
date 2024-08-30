@@ -70,28 +70,32 @@ fn main() -> anyhow::Result<()> {
     let pubkeys = Pubkeys::load(&args.current_key_file, &args.next_key_file)?;
     dbg!(pubkeys.tlsa_rdata());
 
-    let resolver = Resolver::from_system_conf()?;
-    let responses: BTreeSet<_> = resolver
-        .tlsa_lookup(&args.domain_name)?
-        .into_iter()
-        .map(RData::TLSA)
-        .collect();
-    dbg!(&responses);
+    //dbg!(&args.ports);
+    for port in args.ports.unwrap().iter() {
+        let domain_name = format!("_{}._tcp.{}", port, &args.domain_name);
+        println!("{}", domain_name);
 
-    let diff1: BTreeSet<_> = pubkeys
-        .tlsa_rdata()
-        .difference(&responses)
-        .cloned()
-        .collect();
-    dbg!(&diff1);
+        let resolver = Resolver::from_system_conf()?;
+        let responses: BTreeSet<_> = resolver
+            .tlsa_lookup(&domain_name)?
+            .into_iter()
+            .map(RData::TLSA)
+            .collect();
+        dbg!(&responses);
 
-    let diff2: BTreeSet<_> = responses
-        .difference(&pubkeys.tlsa_rdata())
-        .cloned()
-        .collect();
-    dbg!(&diff2);
+        let diff1: BTreeSet<_> = pubkeys
+            .tlsa_rdata()
+            .difference(&responses)
+            .cloned()
+            .collect();
+        dbg!(&diff1);
 
-    dbg!(&args.ports);
+        let diff2: BTreeSet<_> = responses
+            .difference(&pubkeys.tlsa_rdata())
+            .cloned()
+            .collect();
+        dbg!(&diff2);
+    }
 
     Ok(())
 }
