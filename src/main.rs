@@ -18,6 +18,9 @@ struct Args {
 
     #[arg(long)]
     next_key_file: PathBuf,
+
+    #[arg(long)]
+    domain_name: String,
 }
 
 struct Pubkeys([Vec<u8>; 2]);
@@ -66,7 +69,7 @@ fn main() -> anyhow::Result<()> {
 
     let resolver = Resolver::from_system_conf()?;
     let responses: BTreeSet<_> = resolver
-        .tlsa_lookup("_443._tcp.infinitehorizon.biz")?
+        .tlsa_lookup(&args.domain_name)?
         .into_iter()
         .map(RData::TLSA)
         .collect();
