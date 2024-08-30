@@ -21,6 +21,9 @@ struct Args {
 
     #[arg(long)]
     domain_name: String,
+
+    #[arg(long, value_delimiter = ' ', num_args = 1..)]
+    ports: Option<Vec<i32>>,
 }
 
 struct Pubkeys([Vec<u8>; 2]);
@@ -87,6 +90,8 @@ fn main() -> anyhow::Result<()> {
         .cloned()
         .collect();
     dbg!(&diff2);
+
+    dbg!(&args.ports);
 
     Ok(())
 }
