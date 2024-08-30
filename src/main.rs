@@ -23,7 +23,7 @@ struct Args {
     domain_name: String,
 
     #[arg(long, value_delimiter = ' ', num_args = 1..)]
-    ports: Option<Vec<i32>>,
+    ports: Option<Vec<u16>>,
 }
 
 struct Pubkeys([Vec<u8>; 2]);
