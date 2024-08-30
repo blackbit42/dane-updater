@@ -70,7 +70,20 @@ fn main() -> anyhow::Result<()> {
         .into_iter()
         .map(RData::TLSA)
         .collect();
-    dbg!(responses);
+    dbg!(&responses);
+
+    let diff1: BTreeSet<_> = pubkeys
+        .tlsa_rdata()
+        .difference(&responses)
+        .cloned()
+        .collect();
+    dbg!(&diff1);
+
+    let diff2: BTreeSet<_> = responses
+        .difference(&pubkeys.tlsa_rdata())
+        .cloned()
+        .collect();
+    dbg!(&diff2);
 
     Ok(())
 }
