@@ -23,7 +23,7 @@ struct Args {
     domain_name: String,
 
     #[arg(long, value_delimiter = ' ', num_args = 1..)]
-    ports: Option<Vec<u16>>,
+    ports: Vec<u16>,
 }
 
 struct Pubkeys([Vec<u8>; 2]);
@@ -71,7 +71,7 @@ fn main() -> anyhow::Result<()> {
     dbg!(pubkeys.tlsa_rdata());
 
     //dbg!(&args.ports);
-    for port in args.ports.unwrap().iter() {
+    for port in args.ports.iter() {
         let domain_name = format!("_{}._tcp.{}", port, &args.domain_name);
         println!("{}", domain_name);
 
