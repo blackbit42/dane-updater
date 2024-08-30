@@ -76,12 +76,10 @@ fn main() -> anyhow::Result<()> {
         println!("{}", domain_name);
 
         let resolver = Resolver::from_system_conf()?;
-        let responses: BTreeSet<_> = resolver
-            .tlsa_lookup(&domain_name)?
-            .into_iter()
-            .map(RData::TLSA)
-            .collect();
-        dbg!(&responses);
+        let responses: BTreeSet<_> = match resolver.tlsa_lookup(&domain_name) {
+            Ok(x) => x.into_iter().map(RData::TLSA).collect(),
+            Err(_) => BTreeSet::new(),
+        };
 
         let diff1: BTreeSet<_> = pubkeys
             .tlsa_rdata()
