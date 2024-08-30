@@ -68,7 +68,7 @@ fn main() -> anyhow::Result<()> {
     let responses: BTreeSet<_> = resolver
         .tlsa_lookup("_443._tcp.infinitehorizon.biz")?
         .into_iter()
-        .map(|tlsa| RData::TLSA(tlsa))
+        .map(RData::TLSA)
         .collect();
     dbg!(responses);
 
