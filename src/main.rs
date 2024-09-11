@@ -138,6 +138,12 @@ fn main() -> anyhow::Result<()> {
             .cloned()
             .collect();
         //dbg!(&excess);
+
+        for rr in &excess {
+            let mut record = Record::with(Name::from_str(&domain_name)?, RecordType::TLSA, 3600);
+            record.set_data(Some(rr.clone()));
+            sync_client.delete_by_rdata(record, origin.clone())?;
+        }
     }
 
     Ok(())
