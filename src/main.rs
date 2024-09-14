@@ -27,11 +27,8 @@ use std::{
 
 #[derive(Parser, Debug)]
 struct Args {
-    #[arg(long)]
-    current_key_file: PathBuf,
-
-    #[arg(long)]
-    next_key_file: PathBuf,
+    #[arg(long = "key-file")]
+    key_files: Vec<PathBuf>,
 
     #[arg(long)]
     domain_name: String,
@@ -49,9 +46,13 @@ struct Args {
 struct Pubkeys([Vec<u8>; 2]);
 
 impl Pubkeys {
-    fn load(current: &Path, next: &Path) -> anyhow::Result<Self> {
+    fn load<T, P>(paths: P) -> anyhow::Result<Self>
+    where
+        P: IntoIterator<Item = T>,
+        T: AsRef<Path>,
+    {
         Ok(Pubkeys(
-            [current, next]
+            paths
                 .into_iter()
                 .map(load_pubkey)
                 .collect::<Result<Vec<_>, _>>()?
@@ -97,10 +98,8 @@ fn read_tsig_key(tsig_key: &Path) -> anyhow::Result<Key> {
 fn main() -> anyhow::Result<()> {
     env_logger::init();
     let args = Args::parse();
-    log::debug!("current_key_file: {}!", args.current_key_file.display());
-    log::debug!("next_key_file: {}!", args.next_key_file.display());
 
-    let pubkeys = Pubkeys::load(&args.current_key_file, &args.next_key_file)?;
+    let pubkeys = Pubkeys::load(&args.key_files)?;
 
     let tsig_key = read_tsig_key(&args.tsig_key)
         .with_context(|| format!("Error reading from {}", args.tsig_key.display()))?;
