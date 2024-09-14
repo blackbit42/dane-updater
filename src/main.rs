@@ -6,16 +6,16 @@ use hickory_client::{
     client::{Client, SyncClient},
     rr::{
         rdata::{tlsa, tsig::TsigAlgorithm, TLSA},
-        Name, RData, Record, RecordType,
+        Name, RData, RecordType,
     },
     tcp::TcpClientConnection,
 };
-use hickory_proto::rr::dnssec::tsig::TSigner;
+use hickory_proto::rr::{dnssec::tsig::TSigner, RecordSet};
 use hickory_resolver::Resolver;
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeSet,
-    fs,
+    fmt, fs,
     net::SocketAddr,
     path::{Path, PathBuf},
     str::FromStr,
@@ -91,13 +91,12 @@ fn read_tsig_key(tsig_key: &Path) -> anyhow::Result<tsig::Key> {
 }
 
 fn main() -> anyhow::Result<()> {
+    env_logger::init();
     let args = Args::parse();
-    println!("current_key_file: {}!", args.current_key_file.display());
-    println!("next_key_file: {}!", args.next_key_file.display());
+    log::debug!("current_key_file: {}!", args.current_key_file.display());
+    log::debug!("next_key_file: {}!", args.next_key_file.display());
 
-    //let pubkey = load_pubkey(args.current_key_file)?;
     let pubkeys = Pubkeys::load(&args.current_key_file, &args.next_key_file)?;
-    //dbg!(pubkeys.tlsa_rdata());
 
     let tsig_key = read_tsig_key(&args.tsig_key)
         .with_context(|| format!("Error reading from {}", args.tsig_key.display()))?;
@@ -109,42 +108,49 @@ fn main() -> anyhow::Result<()> {
     let sync_client = SyncClient::with_tsigner(client_connection, tsigner);
     let origin = Name::from_str(&format!("{}.", args.domain_name))?;
 
-    //dbg!(&args.ports);
     for port in args.ports.iter() {
         let domain_name = format!("_{}._tcp.{}", port, &args.domain_name);
-        println!("{}", domain_name);
+        log::debug!("Updating {}", domain_name);
 
         let responses: BTreeSet<_> = match resolver.tlsa_lookup(&domain_name) {
             Ok(x) => x.into_iter().map(RData::TLSA).collect(),
             Err(_) => BTreeSet::new(),
         };
 
-        let missing: BTreeSet<_> = pubkeys
-            .tlsa_rdata()
-            .difference(&responses)
-            .cloned()
-            .collect();
-
-        for rr in &missing {
-            let mut record = Record::with(Name::from_str(&domain_name)?, RecordType::TLSA, 3600);
-            record.set_data(Some(rr.clone()));
-            sync_client.create(record, origin.clone())?;
+        let mut create_rrset =
+            RecordSet::with_ttl(Name::from_str(&domain_name)?, RecordType::TLSA, 3600);
+        for rr in pubkeys.tlsa_rdata().difference(&responses) {
+            create_rrset.add_rdata(rr.clone());
         }
+        log::debug!("creating {}", DisplayRecordSet(&create_rrset));
+        sync_client.append(create_rrset, origin.clone(), false)?;
 
-        //dbg!(&missing);
-
-        let excess: BTreeSet<_> = responses
-            .difference(&pubkeys.tlsa_rdata())
-            .cloned()
-            .collect();
-        //dbg!(&excess);
-
-        for rr in &excess {
-            let mut record = Record::with(Name::from_str(&domain_name)?, RecordType::TLSA, 3600);
-            record.set_data(Some(rr.clone()));
-            sync_client.delete_by_rdata(record, origin.clone())?;
+        let mut delete_rrset =
+            RecordSet::with_ttl(Name::from_str(&domain_name)?, RecordType::TLSA, 3600);
+        for rr in responses.difference(&pubkeys.tlsa_rdata()) {
+            delete_rrset.add_rdata(rr.clone());
         }
+        log::debug!("deleting {}", DisplayRecordSet(&delete_rrset));
+        sync_client.delete_by_rdata(delete_rrset, origin.clone())?;
     }
 
     Ok(())
+}
+
+#[derive(Debug)]
+struct DisplayRecordSet<'a>(&'a RecordSet);
+
+impl<'a> fmt::Display for DisplayRecordSet<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[")?;
+        let mut rrs = self.0.records_without_rrsigs().peekable();
+        while let Some(rr) = rrs.next() {
+            write!(f, "{rr}")?;
+            if rrs.peek().is_some() {
+                write!(f, ", ")?;
+            }
+        }
+        write!(f, "]")?;
+        Ok(())
+    }
 }
