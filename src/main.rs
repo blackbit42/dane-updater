@@ -1,10 +1,11 @@
 use anyhow::Context as _;
 use clap::Parser;
-use dane_updater::{load_pubkey, tsig};
+use dane_updater::load_pubkey;
 use data_encoding::BASE64;
 use hickory_client::{
     client::{Client, SyncClient},
     rr::{
+        self,
         rdata::{tlsa, tsig::TsigAlgorithm, TLSA},
         Name, RData, RecordType,
     },
@@ -77,13 +78,13 @@ pub fn sha256(data: &[u8]) -> Vec<u8> {
     hasher.finalize().to_vec()
 }
 
-fn read_tsig_key(tsig_key: &Path) -> anyhow::Result<tsig::Key> {
+fn read_tsig_key(tsig_key: &Path) -> anyhow::Result<Key> {
     let content = fs::read_to_string(tsig_key)?;
     let parts: Vec<_> = content.trim().split(':').collect();
     let [name, algo, data] = parts.as_slice() else {
         anyhow::bail!("Invalid key file format");
     };
-    Ok(tsig::Key::new(
+    Ok(Key::new(
         name.parse()?,
         TsigAlgorithm::from_name(algo.parse()?),
         BASE64.decode(data.as_bytes())?,
@@ -152,5 +153,25 @@ impl<'a> fmt::Display for DisplayRecordSet<'a> {
         }
         write!(f, "]")?;
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Key {
+    pub name: rr::Name,
+    pub algorithm: TsigAlgorithm,
+    pub secret: Vec<u8>,
+}
+
+impl Key {
+    pub fn new<T>(name: rr::Name, algorithm: TsigAlgorithm, secret: T) -> Self
+    where
+        T: Into<Vec<u8>>,
+    {
+        Key {
+            name,
+            algorithm,
+            secret: secret.into(),
+        }
     }
 }
