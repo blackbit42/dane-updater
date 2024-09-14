@@ -43,7 +43,7 @@ struct Args {
     rfc2136_nameserver: SocketAddr,
 }
 
-struct Pubkeys([Vec<u8>; 2]);
+struct Pubkeys(Vec<Vec<u8>>);
 
 impl Pubkeys {
     fn load<T, P>(paths: P) -> anyhow::Result<Self>
@@ -55,9 +55,7 @@ impl Pubkeys {
             paths
                 .into_iter()
                 .map(load_pubkey)
-                .collect::<Result<Vec<_>, _>>()?
-                .try_into()
-                .expect("We have two items"),
+                .collect::<Result<Vec<_>, _>>()?,
         ))
     }
 
