@@ -12,7 +12,10 @@ use hickory_client::{
     tcp::TcpClientConnection,
 };
 use hickory_proto::rr::{dnssec::tsig::TSigner, RecordSet};
-use hickory_resolver::Resolver;
+use hickory_resolver::{
+    config::{NameServerConfigGroup, ResolverConfig, ResolverOpts},
+    Resolver,
+};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeSet,
@@ -102,7 +105,16 @@ fn main() -> anyhow::Result<()> {
     let tsig_key = read_tsig_key(&args.tsig_key)
         .with_context(|| format!("Error reading from {}", args.tsig_key.display()))?;
 
-    let resolver = Resolver::from_system_conf()?;
+    let resolver_config = ResolverConfig::from_parts(
+        None,
+        vec![],
+        NameServerConfigGroup::from_ips_clear(
+            &[args.rfc2136_nameserver.ip()],
+            args.rfc2136_nameserver.port(),
+            true,
+        ),
+    );
+    let resolver = Resolver::new(resolver_config, ResolverOpts::default())?;
 
     let client_connection = TcpClientConnection::new(args.rfc2136_nameserver)?;
     let tsigner = TSigner::new(tsig_key.secret, tsig_key.algorithm, tsig_key.name, 300)?;
