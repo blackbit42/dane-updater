@@ -34,6 +34,9 @@ struct Args {
     #[arg(long)]
     domain_name: String,
 
+    #[arg(long)]
+    zone: Option<String>,
+
     #[arg(long, value_delimiter = ' ', num_args = 1..)]
     ports: Vec<u16>,
 
@@ -122,7 +125,10 @@ fn run() -> anyhow::Result<()> {
     let client_connection = TcpClientConnection::new(args.rfc2136_nameserver)?;
     let tsigner = TSigner::new(tsig_key.secret, tsig_key.algorithm, tsig_key.name, 300)?;
     let sync_client = SyncClient::with_tsigner(client_connection, tsigner);
-    let origin = Name::from_str(&format!("{}.", args.domain_name))?;
+    let origin = Name::from_str(&format!(
+        "{}.",
+        args.zone.as_ref().unwrap_or(&args.domain_name)
+    ))?;
 
     for port in args.ports.iter() {
         let domain_name = format!("_{}._tcp.{}", port, &args.domain_name);
