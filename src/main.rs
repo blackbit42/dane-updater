@@ -22,6 +22,7 @@ use std::{
     fmt, fs,
     net::SocketAddr,
     path::{Path, PathBuf},
+    process::ExitCode,
     str::FromStr,
 };
 
@@ -54,7 +55,12 @@ impl Pubkeys {
         Ok(Pubkeys(
             paths
                 .into_iter()
-                .map(load_pubkey)
+                .map(|path| {
+                    let path = path.as_ref();
+                    load_pubkey(path).with_context(|| {
+                        format!("could not load public key from '{}'", path.display())
+                    })
+                })
                 .collect::<Result<Vec<_>, _>>()?,
         ))
     }
@@ -84,7 +90,7 @@ fn read_tsig_key(tsig_key: &Path) -> anyhow::Result<Key> {
     let content = fs::read_to_string(tsig_key)?;
     let parts: Vec<_> = content.trim().split(':').collect();
     let [name, algo, data] = parts.as_slice() else {
-        anyhow::bail!("Invalid key file format");
+        anyhow::bail!("invalid key file format");
     };
     Ok(Key::new(
         name.parse()?,
@@ -93,14 +99,14 @@ fn read_tsig_key(tsig_key: &Path) -> anyhow::Result<Key> {
     ))
 }
 
-fn main() -> anyhow::Result<()> {
+fn run() -> anyhow::Result<()> {
     env_logger::init();
     let args = Args::parse();
 
     let pubkeys = Pubkeys::load(&args.key_files)?;
 
     let tsig_key = read_tsig_key(&args.tsig_key)
-        .with_context(|| format!("Error reading from {}", args.tsig_key.display()))?;
+        .with_context(|| format!("error reading from {}", args.tsig_key.display()))?;
 
     let resolver_config = ResolverConfig::from_parts(
         None,
@@ -132,7 +138,7 @@ fn main() -> anyhow::Result<()> {
         for rr in pubkeys.tlsa_rdata().difference(&responses) {
             create_rrset.add_rdata(rr.clone());
         }
-        log::debug!("creating {}", DisplayRecordSet(&create_rrset));
+        log::debug!("Creating {}", DisplayRecordSet(&create_rrset));
         sync_client.append(create_rrset, origin.clone(), false)?;
 
         let mut delete_rrset =
@@ -140,11 +146,24 @@ fn main() -> anyhow::Result<()> {
         for rr in responses.difference(&pubkeys.tlsa_rdata()) {
             delete_rrset.add_rdata(rr.clone());
         }
-        log::debug!("deleting {}", DisplayRecordSet(&delete_rrset));
+        log::debug!("Deleting {}", DisplayRecordSet(&delete_rrset));
         sync_client.delete_by_rdata(delete_rrset, origin.clone())?;
     }
 
     Ok(())
+}
+
+fn main() -> ExitCode {
+    let name = std::env::args_os()
+        .next()
+        .and_then(|arg| arg.to_str().map(String::from))
+        .unwrap_or(env!("CARGO_PKG_NAME").into());
+    if let Err(e) = run() {
+        eprintln!("{name}: {e:#}");
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
 }
 
 #[derive(Debug)]
