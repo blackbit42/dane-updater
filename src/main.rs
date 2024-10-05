@@ -166,9 +166,9 @@ fn main() -> ExitCode {
         .unwrap_or(env!("CARGO_PKG_NAME").into());
     if let Err(e) = run() {
         eprintln!("{name}: {e:#}");
-        ExitCode::SUCCESS
-    } else {
         ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
     }
 }
 
