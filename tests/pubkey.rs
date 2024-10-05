@@ -1,3 +1,5 @@
+// SPDX-Licence-Identifier: MIT OR Apache-2.0
+
 use dane_updater::load_pubkey;
 
 #[test]

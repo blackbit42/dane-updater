@@ -1,3 +1,5 @@
+// SPDX-Licence-Identifier: MIT OR Apache-2.0
+
 use anyhow::Context as _;
 use clap::Parser;
 use dane_updater::load_pubkey;

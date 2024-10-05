@@ -1,3 +1,5 @@
+// SPDX-Licence-Identifier: MIT OR Apache-2.0
+
 use anyhow::anyhow;
 use rustls_pemfile::Item;
 use sec1::der::Encode;
