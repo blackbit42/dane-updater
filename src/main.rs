@@ -41,7 +41,7 @@ struct Args {
     ports: Vec<u16>,
 
     #[arg(long)]
-    tsig_key: PathBuf,
+    tsig_key: Option<PathBuf>,
 
     #[arg(long)]
     rfc2136_nameserver: SocketAddr,
@@ -108,8 +108,14 @@ fn run() -> anyhow::Result<()> {
 
     let pubkeys = Pubkeys::load(&args.key_files)?;
 
-    let tsig_key = read_tsig_key(&args.tsig_key)
-        .with_context(|| format!("error reading from {}", args.tsig_key.display()))?;
+    let tsig_key = if let Some(path) = args.tsig_key.as_ref() {
+        Some(
+            read_tsig_key(path)
+                .with_context(|| format!("error reading from {}", path.display()))?,
+        )
+    } else {
+        None
+    };
 
     let resolver_config = ResolverConfig::from_parts(
         None,
@@ -123,8 +129,12 @@ fn run() -> anyhow::Result<()> {
     let resolver = Resolver::new(resolver_config, ResolverOpts::default())?;
 
     let client_connection = TcpClientConnection::new(args.rfc2136_nameserver)?;
-    let tsigner = TSigner::new(tsig_key.secret, tsig_key.algorithm, tsig_key.name, 300)?;
-    let sync_client = SyncClient::with_tsigner(client_connection, tsigner);
+    let sync_client = if let Some(tsig_key) = tsig_key {
+        let tsigner = TSigner::new(tsig_key.secret, tsig_key.algorithm, tsig_key.name, 300)?;
+        SyncClient::with_tsigner(client_connection, tsigner)
+    } else {
+        SyncClient::new(client_connection)
+    };
     let origin = Name::from_str(&format!(
         "{}.",
         args.zone.as_ref().unwrap_or(&args.domain_name)
