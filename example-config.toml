@@ -1,0 +1,6 @@
+[defaults]
+rfc2136-nameserver = "[2001:500:8f::53]:53"
+
+[domains."mail.example.org"]
+ports = [25]
+zone = "example.org"

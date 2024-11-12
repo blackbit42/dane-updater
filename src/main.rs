@@ -1,6 +1,6 @@
 // SPDX-Licence-Identifier: MIT OR Apache-2.0
 
-use anyhow::Context as _;
+use anyhow::{anyhow, Context as _};
 use clap::Parser;
 use dane_updater::load_pubkey;
 use data_encoding::BASE64;
@@ -28,13 +28,15 @@ use std::{
     str::FromStr,
 };
 
+mod config;
+use config::Config;
+
 #[derive(Parser, Debug)]
 struct Args {
+    domain_name: String,
+
     #[arg(long = "key-file")]
     key_files: Vec<PathBuf>,
-
-    #[arg(long)]
-    domain_name: String,
 
     #[arg(long)]
     zone: Option<String>,
@@ -46,7 +48,61 @@ struct Args {
     tsig_key: Option<PathBuf>,
 
     #[arg(long)]
+    rfc2136_nameserver: Option<SocketAddr>,
+
+    #[arg(long = "config")]
+    config_file: Option<PathBuf>,
+}
+
+#[derive(Debug)]
+struct Params {
+    key_files: Vec<PathBuf>,
+    domain_name: String,
+    zone: String,
+    ports: Vec<u16>,
+    tsig_key: Option<PathBuf>,
     rfc2136_nameserver: SocketAddr,
+}
+
+impl Params {
+    fn construct(args: Args, config: Config) -> anyhow::Result<Self> {
+        Ok(Params {
+            key_files: args.key_files,
+            domain_name: args.domain_name.clone(),
+            zone: config
+                .get(&args.domain_name)
+                .and_then(|domain| domain.zone())
+                .unwrap_or(&args.domain_name)
+                .to_owned(),
+            rfc2136_nameserver: args
+                .rfc2136_nameserver
+                .as_ref()
+                .or_else(|| config.defaults().rfc2136_nameserver())
+                .ok_or_else(|| {
+                    anyhow!("no RFC2136 nameserver specified on command line or config file")
+                })?
+                .to_owned(),
+            ports: if args.ports.is_empty() {
+                config
+                    .get(&args.domain_name)
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "no ports provided on commandline and domain {} not configured",
+                            args.domain_name
+                        )
+                    })?
+                    .ports()
+                    .to_vec()
+            } else {
+                args.ports.clone()
+            },
+            tsig_key: args
+                .tsig_key
+                .as_deref()
+                .or_else(|| config.defaults().tsig_key())
+                .map(ToOwned::to_owned),
+        })
+    }
 }
 
 struct Pubkeys(Vec<Vec<u8>>);
@@ -106,11 +162,23 @@ fn read_tsig_key(tsig_key: &Path) -> anyhow::Result<Key> {
 
 fn run() -> anyhow::Result<()> {
     env_logger::init();
-    let args = Args::parse();
+    let params = {
+        let args = Args::parse();
+        let config = match &args.config_file {
+            Some(path) => {
+                let contents = fs::read_to_string(path)
+                    .with_context(|| format!("could not read config file {}", path.display()))?;
+                toml::from_str(&contents)
+                    .with_context(|| format!("could not parse config file {}", path.display()))?
+            }
+            None => Config::default(),
+        };
+        Params::construct(args, config)?
+    };
 
-    let pubkeys = Pubkeys::load(&args.key_files)?;
+    let pubkeys = Pubkeys::load(&params.key_files)?;
 
-    let tsig_key = if let Some(path) = args.tsig_key.as_ref() {
+    let tsig_key = if let Some(path) = params.tsig_key.as_ref() {
         Some(
             read_tsig_key(path)
                 .with_context(|| format!("error reading from {}", path.display()))?,
@@ -123,27 +191,24 @@ fn run() -> anyhow::Result<()> {
         None,
         vec![],
         NameServerConfigGroup::from_ips_clear(
-            &[args.rfc2136_nameserver.ip()],
-            args.rfc2136_nameserver.port(),
+            &[params.rfc2136_nameserver.ip()],
+            params.rfc2136_nameserver.port(),
             true,
         ),
     );
     let resolver = Resolver::new(resolver_config, ResolverOpts::default())?;
 
-    let client_connection = TcpClientConnection::new(args.rfc2136_nameserver)?;
+    let client_connection = TcpClientConnection::new(params.rfc2136_nameserver)?;
     let sync_client = if let Some(tsig_key) = tsig_key {
         let tsigner = TSigner::new(tsig_key.secret, tsig_key.algorithm, tsig_key.name, 300)?;
         SyncClient::with_tsigner(client_connection, tsigner)
     } else {
         SyncClient::new(client_connection)
     };
-    let origin = Name::from_str(&format!(
-        "{}.",
-        args.zone.as_ref().unwrap_or(&args.domain_name)
-    ))?;
+    let origin = Name::from_str(&format!("{}.", params.zone,))?;
 
-    for port in args.ports.iter() {
-        let domain_name = format!("_{}._tcp.{}", port, &args.domain_name);
+    for port in params.ports.iter() {
+        let domain_name = format!("_{}._tcp.{}", port, &params.domain_name);
         log::debug!("Updating {}", domain_name);
 
         let responses: BTreeSet<_> = match resolver.tlsa_lookup(&domain_name) {
