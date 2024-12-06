@@ -32,6 +32,7 @@ mod config;
 use config::Config;
 
 #[derive(Parser, Debug)]
+#[command(version)]
 struct Args {
     domain_name: String,
 
