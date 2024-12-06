@@ -1,5 +1,6 @@
 [defaults]
 rfc2136-nameserver = "[2001:500:8f::53]:53"
+tsig-key = "tsig.key"
 
 [domains."mail.example.org"]
 ports = [25]
